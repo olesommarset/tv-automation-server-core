@@ -20,7 +20,8 @@ export enum TimelineContentType {
 	ATEM_ME = 'atem_me',
 	ATEM_DSK = 'atem_dsk',
 	ATEM_AUX = 'atem_aux',
-	ATEM_SSRC = 'atem_ssrc'
+	ATEM_SSRC = 'atem_ssrc',
+	NRK_TEMPLATE = 'nrk_template'
 }
 export declare namespace Atem_Enums {
 	enum TransitionStyle {
@@ -177,6 +178,29 @@ export interface TimelineObjCCGTemplate extends TimelineObj {
 			name: string,
 			data?: any, // free to do whatever inside the object, so long as the template likes it
 			useStopCommand: boolean // whether to use CG stop or CLEAR layer
+		}
+	}
+}
+export interface TimelineObjHTMLPost extends TimelineObj {
+	content: {
+		objects?: Array<TimelineObject>
+		keyframes?: Array<TimelineKeyframe>
+		type: TimelineContentType.NRK_TEMPLATE
+		transitions?: {
+			inTransition?: TimelineTransition
+			outTransition?: TimelineTransition
+		}
+		attributes: {
+			render: {
+				channel: string,
+				system: string,
+				group: string
+			},
+			playout: {
+				event: string,
+				layer: string,
+				template: string
+			}
 		}
 	}
 }
