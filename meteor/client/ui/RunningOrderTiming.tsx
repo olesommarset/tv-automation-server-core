@@ -17,14 +17,34 @@ import { getCurrentTime } from '../../lib/lib'
 
 import { RundownUtils } from '../lib/rundown'
 
-const TIMING_REFRESH_INTERVAL = 250
+export namespace RunningOrderTiming {
+	export enum Events {
+		'timeupdate'		= 'sofie:roTimeUpdate'
+	}
+
+	export interface RunningOrderTimingContext {
+		totalRundownDuration?: number
+		remainingRundownDuration?: number
+		asPlayedRundownDuration?: number
+		segmentLineCountdown?: {
+			[key: string]: number
+		}
+	}
+
+	export interface InjectedROTimingProps {
+		timingDurations: RunningOrderTimingContext
+	}
+}
+
+const TIMING_DEFAULT_REFRESH_INTERVAL = 250
 
 interface IRunningOrderTimingProviderProps {
 	runningOrder: RunningOrder
 	segments: Array<Segment & { items: Array<SegmentLine> }>
+	refreshInterval?: number
 }
 interface IRunningOrderTimingProviderChildContext {
-	durations: any
+	durations: RunningOrderTiming.RunningOrderTimingContext
 }
 
 export const RunningOrderTimingProvider = withTracker((props, state) => {
@@ -62,8 +82,19 @@ export const RunningOrderTimingProvider = withTracker((props, state) => {
 		durations: PropTypes.object.isRequired
 	}
 
-	durations: any = {}
+	durations: RunningOrderTiming.RunningOrderTimingContext = {}
 	refreshTimer: NodeJS.Timer
+	refreshTimerInterval: number
+
+	constructor (props) {
+		super(props)
+
+		if (props.refreshInterval && _.isNumber(props.refreshInterval)) {
+			this.refreshTimerInterval = props.refreshInverval
+		} else {
+			this.refreshTimerInterval = TIMING_DEFAULT_REFRESH_INTERVAL
+		}
+	}
 
 	getChildContext (): IRunningOrderTimingProviderChildContext {
 		return {
@@ -74,7 +105,18 @@ export const RunningOrderTimingProvider = withTracker((props, state) => {
 	componentDidMount () {
 		this.refreshTimer = setInterval(() => {
 			this.updateDurations()
-		}, TIMING_REFRESH_INTERVAL)
+		}, this.refreshTimerInterval)
+	}
+
+	componentWillReceiveProps (nextProps) {
+		// change refresh interval if needed
+		if (this.refreshTimerInterval !== nextProps.refreshInterval && _.isNumber(nextProps.refreshInterval) && this.refreshTimer) {
+			this.refreshTimerInterval = nextProps.refreshInterval
+			clearInterval(this.refreshTimer)
+			this.refreshTimer = setInterval(() => {
+				this.updateDurations()
+			}, this.refreshTimerInterval)
+		}
 	}
 
 	componentWillUnmount () {
@@ -140,12 +182,15 @@ export const RunningOrderTimingProvider = withTracker((props, state) => {
 					localAccum += linearSegLines[i][1] || 0
 					linearSegLines[i][1] = null
 				} else if (i === nextAIndex) {
+					// localAccum += linearSegLines[i][1] || 0
 					linearSegLines[i][1] = currentRemaining
 				} else {
 					linearSegLines[i][1] = (linearSegLines[i][1] || 0) - localAccum + currentRemaining
 				}
 			}
 		}
+
+		// console.log(linearSegLines.map((value) => value[1]))
 
 		this.durations = _.extend(this.durations, {
 			totalRundownDuration,
@@ -154,7 +199,7 @@ export const RunningOrderTimingProvider = withTracker((props, state) => {
 			segmentLineCountdown: _.object(linearSegLines)
 		})
 
-		const event = new Event('sofie:roTimingUpdated')
+		const event = new Event(RunningOrderTiming.Events.timeupdate)
 
 		window.dispatchEvent(event)
 	}
@@ -178,7 +223,11 @@ export function withTiming (options?) {
 			}
 
 			componentDidMount () {
-				window.addEventListener('sofie:roTimingUpdated', this.refreshComponent)
+				window.addEventListener(RunningOrderTiming.Events.timeupdate, this.refreshComponent)
+			}
+
+			componentWillUnmount () {
+				window.removeEventListener(RunningOrderTiming.Events.timeupdate, this.refreshComponent)
 			}
 
 			refreshComponent = () => {
@@ -196,7 +245,7 @@ export function withTiming (options?) {
 
 interface ISegmentLineCountdownProps {
 	segmentLineId: string
-	timingDurations: any
+	timingDurations: RunningOrderTiming.RunningOrderTimingContext
 }
 export const SegmentLineCountdown = withTiming()((props: ISegmentLineCountdownProps) => (
 	<span>
