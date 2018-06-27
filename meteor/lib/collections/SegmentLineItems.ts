@@ -62,6 +62,14 @@ export interface SegmentLineItem extends SegmentLineItemGeneric {
 	segmentLineId: string
 	expectedDuration: number
 	isTransition: boolean
+	isInfinite: boolean
+
+	/** This is set when the item is infinite, to deduplicate the contents on the timeline, while allowing out of order */
+	infiniteId?: string
+	/** Set when this is infinite and copied from the previous segmentline. This allows us to track its ownership and purge it on activation */
+	// infiniteCopyRefId?: string
+
+	startedPlayback?: number
 
 	adLibSourceId?: string // only set when generated from an adlib
 	dynamicallyInserted?: boolean // only set when generated from an adlib

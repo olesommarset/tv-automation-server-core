@@ -146,6 +146,8 @@ export namespace ServerPeripheralDeviceAPI {
 				multi: true
 			})
 
+			// @todo this only appears to be firing for sl_groups, so has no effect and does not help with sli_groups
+
 			Meteor.call('playout_timelineTriggerTimeUpdate', o.id, o.time)
 		})
 	}
@@ -160,6 +162,18 @@ export namespace ServerPeripheralDeviceAPI {
 		logger.info('RunningOrder: Setting playback started ' + r.time + ' to id ' + r.slId)
 
 		Meteor.call('playout_segmentLinePlaybackStart', r.roId, r.slId, r.time)
+	}
+	export function segmentLineItemPlaybackStarted (id: string, token: string, r: PeripheralDeviceAPI.SegmentLineItemPlaybackStartedResult) {
+		// This is called from the playout-gateway when an auto-next event occurs
+		let peripheralDevice = PeripheralDeviceSecurity.getPeripheralDevice(id, token, this)
+		if (!peripheralDevice) throw new Meteor.Error(404, "peripheralDevice '" + id + "' not found!")
+
+		check(r.time, Number)
+		check(r.roId, String)
+		check(r.sliId, String)
+		logger.info('RunningOrder: Setting playback started ' + r.time + ' to sli id ' + r.sliId)
+
+		Meteor.call('playout_segmentLineItemPlaybackStart', r.roId, r.sliId, r.time)
 	}
 	export function pingWithCommand (id: string, token: string, message: string) {
 		let peripheralDevice = PeripheralDeviceSecurity.getPeripheralDevice(id, token, this)
@@ -1198,6 +1212,9 @@ methods[PeripheralDeviceAPI.methods.getPeripheralDevice ] = (deviceId, deviceTok
 }
 methods[PeripheralDeviceAPI.methods.segmentLinePlaybackStarted] = (deviceId, deviceToken, r: PeripheralDeviceAPI.SegmentLinePlaybackStartedResult) => {
 	return ServerPeripheralDeviceAPI.segmentLinePlaybackStarted(deviceId, deviceToken, r)
+}
+methods[PeripheralDeviceAPI.methods.segmentLineItemPlaybackStarted] = (deviceId, deviceToken, r: PeripheralDeviceAPI.SegmentLineItemPlaybackStartedResult) => {
+	return ServerPeripheralDeviceAPI.segmentLineItemPlaybackStarted(deviceId, deviceToken, r)
 }
 methods[PeripheralDeviceAPI.methods.pingWithCommand] = (deviceId, deviceToken, message: string) => {
 	return ServerPeripheralDeviceAPI.pingWithCommand(deviceId, deviceToken, message)

@@ -971,7 +971,7 @@ Meteor.methods({
 					"ModBy": "N12050",
 					"ModTime": "20180522T092414Z",
 					"MOSAbstracts": "METADATA\n US-NJ-BEAR-20180501I IMPORT_QUANTEL 00:02:03:12 \nNavnesuper: Alf Hansen, allviter\nNavnesuper: Hans Hansen, reporter",
-					"MOSItemDurations": "123,48",
+					"MOSItemDurations": "13,48",
 					"MOSItemEdDurations": "",
 					"MOSObjSlugs": "M: \nUS-NJ-BEAR-20180501I\nNavnesuper: Alf Hansen, allviter\nNavnesuper: Hans Hansen, reporter",
 					"MOSSlugs": "Uten tittel\nSAK 1;SAK 1-3\nSAK 1;SAK 1-4\nSAK 1;SAK 1-5",
@@ -982,7 +982,7 @@ Meteor.methods({
 					"TextTime": 0,
 					"Bildebeskrivelse": "",
 					"mosartType": "FULL",
-					"ReadTime": 123.48,
+					"ReadTime": 13.48,
 					"Rettigheter": "Gult",
 					"ENPSItemType": 3
 				}
