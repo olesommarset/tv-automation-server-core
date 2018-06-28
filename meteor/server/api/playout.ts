@@ -339,20 +339,11 @@ Meteor.methods({
 			let itemsToStop = segLine.getSegmentLinesItems().filter(l => l.isInfinite && segLineItem && l.sourceLayerId === segLineItem.sourceLayerId && segLineItem._id !== l._id)
 			itemsToStop.forEach(l => {
 				let duration = 1
-				if (!l.startedPlayback) {
-					// if (l._id !== l.infiniteId && l.infiniteId) {
-					// 	// TODO - is this correct if it returned to screen via out of order?
-					// 	let orig = SegmentLineItems.findOne(l.infiniteId)
-					// 	if (!orig) {
-					// 		throw new Meteor.Error(404, `Segment line item "${l.infiniteId}" in running order "${roId}" not found!`)
-					// 	}
-
-					// 	if (orig.startedPlayback) {
-					// 		duration = startedPlayback - orig.startedPlayback
-					// 	}
-					// }
-				} else {
+				if (l.startedPlayback) {
 					duration = startedPlayback - l.startedPlayback
+				}
+				if (duration === 0) {
+					duration = 1
 				}
 
 				logger.info('set duration of ' + l._id + ': ' + duration + ' (started: ' + l.startedPlayback + ')')
