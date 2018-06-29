@@ -1017,10 +1017,10 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 					}
 				}
 
-				const objs = transformSegmentLineIntoTimeline(currentInfiniteItems, infiniteGroup, false)
+				const objs = transformSegmentLineIntoTimeline([item], infiniteGroup, false)
 				// @todo this is a hack that hopefully will not be needed once the duration of the infinite item is back to 0
-				if (objs[0].duration !== 0 && currentInfiniteItems[0].duration) {
-					objs[0].duration = currentInfiniteItems[0].duration || 0
+				if (objs[0].duration !== 0 && item.duration) {
+					objs[0].duration = item.duration || 0
 				}
 
 				timelineObjs = timelineObjs.concat(infiniteGroup, objs)
@@ -1150,13 +1150,12 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 					}
 				}
 			})
-			if (!shouldRunAgain || shouldNotRunAgain) break
+			if (!shouldRunAgain && shouldNotRunAgain) break
 		}
 
 		const missingDev = groupObjs.filter(o => !o.deviceId || !o.deviceId[0]).map(o => o._id)
 		if (missingDev.length > 0) {
 			logger.warn('Found groups without any deviceId: ' + missingDev)
-			groupObjs.filter(o => !o.deviceId || !o.deviceId[0]).forEach(o => o.deviceId[0] = 'EK7T7MxLDgWxAJczn')
 		}
 
 		// logger.debug('timelineObjs', timelineObjs)
