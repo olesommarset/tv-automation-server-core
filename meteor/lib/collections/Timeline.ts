@@ -150,6 +150,9 @@ export interface TimelineObjGroupSegmentLine extends TimelineObjGroup {
 export interface TimelineObjAbstract extends TimelineObj { // used for sending callbacks
 	slId?: string
 }
+export interface TimelineObjAbstract2 extends TimelineObj { // used for sending callbacks
+	sliId?: string
+}
 export interface TimelineObjCCGVideo extends TimelineObj {
 	content: {
 		objects?: Array<TimelineObject>

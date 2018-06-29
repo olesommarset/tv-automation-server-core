@@ -420,6 +420,11 @@ declare enum LineItemStatusCode {
 	/** The source is present, but should not be played due to a technical malfunction (file is broken, camera robotics failed, REMOTE input is just bars, etc.) */
 	SOURCE_BROKEN = 2
 }
+
+declare enum SegmentLineItemLifespan {
+	OutOnNext = 1,
+	Infinite = 2,
+}
 `, libName)
 		}
 		let typings
