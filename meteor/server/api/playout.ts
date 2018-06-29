@@ -18,6 +18,11 @@ import { PlayoutTimelinePrefixes } from '../../lib/api/playout'
 import { TemplateContext, TemplateResultAfterPost, runNamedTemplate } from './templates/templates'
 import { RunningOrderBaselineAdLibItem, RunningOrderBaselineAdLibItems } from '../../lib/collections/RunningOrderBaselineAdLibItems'
 import { sendStoryStatus } from './peripheralDevice'
+<<<<<<< HEAD
+import { StudioInstallations } from '../../lib/collections/StudioInstallations'
+import { triggerExternalMessage } from './externalMessage'
+=======
+>>>>>>> b9a4b7c584f51ef00e45e33b68ea16129d61b6ed
 
 Meteor.methods({
 	/**
@@ -117,14 +122,15 @@ Meteor.methods({
 		if (showStyle.baselineTemplate) {
 			const result: TemplateResultAfterPost = runNamedTemplate(showStyle, showStyle.baselineTemplate, literal<TemplateContext>({
 				runningOrderId: runningOrder._id,
-				segmentLine: runningOrder.getSegmentLines()[0]
+				segmentLine: runningOrder.getSegmentLines()[0],
+				templateId: showStyle.baselineTemplate
 			}), {
 				// Dummy object, not used in this template:
 				RunningOrderId: new MosString128(''),
 				Body: [],
 				ID: new MosString128(''),
 
-			})
+			}, 'baseline')
 
 			if (result.baselineItems) {
 				logger.info(`... got ${result.baselineItems.length} items from template.`)
@@ -230,14 +236,8 @@ Meteor.methods({
 		if (nextSegmentLine) {
 			clearNextLineStartedPlaybackAndDuration(roId, nextSegmentLine._id)
 		}
-
-		updateTimeline(runningOrder.studioInstallationId)
-
-		if (takeSegmentLine.updateStoryStatus) {
-			sendStoryStatus(runningOrder, takeSegmentLine)
-		}
+		afterTake(runningOrder, takeSegmentLine, previousSegmentLine || null)
 	},
-
 	'playout_setNext': (roId: string, nextSlId: string) => {
 
 		let runningOrder = RunningOrders.findOne(roId)
@@ -314,6 +314,11 @@ Meteor.methods({
 			runningOrderId: roId
 		})
 
+		let previousSegmentLine = (runningOrder.currentSegmentLineId ?
+			SegmentLines.findOne(runningOrder.currentSegmentLineId)
+			: null
+		)
+
 		if (segLine) {
 			// make sure we don't run multiple times, even if TSR calls us multiple times
 			if (!segLine.startedPlayback) {
@@ -336,13 +341,13 @@ Meteor.methods({
 				} else if (runningOrder.nextSegmentLineId === slId) {
 					// this is the next segment line, clearly an autoNext has taken place
 					if (runningOrder.currentSegmentLineId) {
-						let prevSegLine = SegmentLines.findOne(runningOrder.currentSegmentLineId)
+						// let previousSegmentLine = SegmentLines.findOne(runningOrder.currentSegmentLineId)
 
-						if (!prevSegLine) {
+						if (!previousSegmentLine) {
 							// We couldn't find the previous segment line: this is not a critical issue, but is clearly is a symptom of a larger issue
 							logger.error(`Previous segment line "${runningOrder.currentSegmentLineId}" on running order "${roId}" could not be found.`)
-						} else if (!prevSegLine.duration) {
-							setPreviousLinePlaybackDuration(roId, prevSegLine, startedPlayback)
+						} else if (!previousSegmentLine.duration) {
+							setPreviousLinePlaybackDuration(roId, previousSegmentLine, startedPlayback)
 						}
 					}
 
@@ -395,11 +400,8 @@ Meteor.methods({
 				SegmentLines.update(segLine._id, {$set: {
 					startedPlayback
 				}})
-				updateTimeline(runningOrder.studioInstallationId, startedPlayback)
 
-				if (segLine.updateStoryStatus) {
-					sendStoryStatus(runningOrder, segLine)
-				}
+				afterTake(runningOrder, segLine, previousSegmentLine || null)
 			}
 		} else {
 			throw new Meteor.Error(404, `Segment line "${slId}" in running order "${roId}" not found!`)
@@ -562,6 +564,16 @@ Meteor.methods({
 		}
 	}
 })
+function afterTake (runningOrder: RunningOrder, takeSegmentLine: SegmentLine, previousSegmentLine: SegmentLine | null) {
+	// This function should be called at the end of a "take" event (when the SegmentLines have been updated)
+	updateTimeline(runningOrder.studioInstallationId)
+
+	if (takeSegmentLine.updateStoryStatus) {
+		sendStoryStatus(runningOrder, takeSegmentLine)
+	}
+
+	triggerExternalMessage(runningOrder, takeSegmentLine, previousSegmentLine)
+}
 
 // TODO - execute this after importing rundown
 function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUntilEnd: boolean, previousLine?: SegmentLine) {

@@ -13,6 +13,8 @@ import { RuntimeFunctionDebugDataObj, RuntimeFunctionDebugData } from '../../../
 import Moment from 'react-moment'
 import { MeteorReactComponent } from '../../lib/MeteorReactComponent'
 import * as ClassNames from 'classnames'
+import * as faTrash from '@fortawesome/fontawesome-free-solid/faTrash'
+import * as FontAwesomeIcon from '@fortawesome/react-fontawesome'
 
 interface IMonacoProps {
 	runtimeFunction: RuntimeFunction
@@ -194,6 +196,8 @@ declare interface Context {
 	warning: (messageToLog: string) => void
 	getSegmentLines (): Array<SegmentLine>
 	getSegmentLineIndex (): number
+	getCachedStoryForSegmentLine (segmentLine: SegmentLine): IMOSROFullStory
+	getCachedStoryForRunningOrder: () => IMOSRunningOrder
 }
 type MosString128 = string
 type Duration = number
@@ -423,13 +427,19 @@ declare enum SegmentLineItemLifespan {
 }
 `, libName)
 		}
+		let typings
 		if (this.props.functionTyping) {
 			// convert functionTyping to typings:
-			let typings = this.convertFunctionTyping(this.props.functionTyping)
-
-			delete monaco.languages.typescript.javascriptDefaults['_extraLibs']['functionTyping.d.ts']
-			monaco.languages.typescript.javascriptDefaults.addExtraLib(typings, 'functionTyping.d.ts')
+			typings = this.convertFunctionTyping(this.props.functionTyping)
+		} else {
+			typings = (
+				'declare type Arg0 = Context\n' +
+				'declare type Arg1 = Story'
+			)
 		}
+
+		delete monaco.languages.typescript.javascriptDefaults['_extraLibs']['functionTyping.d.ts']
+		monaco.languages.typescript.javascriptDefaults.addExtraLib(typings, 'functionTyping.d.ts')
 		if (!this._editor) {
 			this._editor = monaco.editor.create(document.getElementById('monaco-container')!, {
 				value: this.props.runtimeFunction.code,
@@ -475,6 +485,8 @@ declare enum SegmentLineItemLifespan {
 				return name
 			} else if (_.isString(o)) {
 				return '"' + o + '"'
+			} else if (_.isNumber(o)) {
+				return o
 			} else {
 				return typeof o
 				// return typeof o
@@ -748,6 +760,9 @@ let SelectRFDD = translateWithTracker<SelectRFDDProps, IState, ISelectRFDDTracke
 	isSelected (rtfdd): boolean {
 		return this.props.selectedRtfdd === rtfdd._id
 	}
+	remove (rtfdd) {
+		RuntimeFunctionDebugData.remove(rtfdd._id)
+	}
 	render () {
 		const { t } = this.props
 
@@ -755,7 +770,11 @@ let SelectRFDD = translateWithTracker<SelectRFDDProps, IState, ISelectRFDDTracke
 			this.props.runtimeFunctionDebugData.length ? (
 				<table>
 					<tr>
-						<th>Data timestamp</th>
+						<th>Timestamp</th>
+						<th>Snapshot name</th>
+						<th>Keep</th>
+						<th>Select</th>
+						<th>Remove</th>
 					</tr>
 					{_.map(this.props.runtimeFunctionDebugData, (rtfdd) => {
 						return (
@@ -764,8 +783,24 @@ let SelectRFDD = translateWithTracker<SelectRFDDProps, IState, ISelectRFDDTracke
 									<Moment fromNow>{rtfdd.created}</Moment>
 								</td>
 								<td>
+									{rtfdd.reason}
+								</td>
+								<td>
+									<EditAttribute
+										attribute='dontRemove'
+										obj={rtfdd}
+										type='checkbox'
+										collection={RuntimeFunctionDebugData}
+									/>
+								</td>
+								<td>
 									<button className={ClassNames('btn', this.isSelected(rtfdd) ? 'btn-default' : 'btn-primary')}
 										onClick={() => this.select(rtfdd)}>{t('Select this')}
+									</button>
+								</td>
+								<td>
+									<button className='action-btn' onClick={(e) => this.remove(rtfdd)}>
+										<FontAwesomeIcon icon={faTrash} />
 									</button>
 								</td>
 							</tr>
