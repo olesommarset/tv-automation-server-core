@@ -1,5 +1,5 @@
 import { Meteor } from 'meteor/meteor'
-import { RunningOrders } from '../../lib/collections/RunningOrders'
+import { RunningOrders, RunningOrder } from '../../lib/collections/RunningOrders'
 import { SegmentLine, SegmentLines } from '../../lib/collections/SegmentLines'
 import { SegmentLineItem, SegmentLineItems, ITimelineTrigger } from '../../lib/collections/SegmentLineItems'
 import { SegmentLineAdLibItems, SegmentLineAdLibItem } from '../../lib/collections/SegmentLineAdLibItems'
@@ -88,6 +88,8 @@ Meteor.methods({
 			runningOrderId: runningOrder._id,
 			dynamicallyInserted: true
 		})
+
+		// @todo - ensure that any infinite contintations removed by adlib are restored
 
 		// Remove duration on segmentLineItems, as this is set by the ad-lib playback editing
 		SegmentLineItems.update({ runningOrderId: runningOrder._id }, { $unset: {
@@ -486,6 +488,8 @@ Meteor.methods({
 
 		// logger.debug('adLibItemStart', newSegmentLineItem)
 
+		stopInfinitesRunningOnLayer(runningOrder, segLine, newSegmentLineItem.sourceLayerId)
+
 		updateTimeline(runningOrder.studioInstallationId)
 	},
 	'playout_runningOrderBaselineAdLibItemStart': (roId: string, slId: string, robaliId: string) => {
@@ -508,6 +512,8 @@ Meteor.methods({
 		SegmentLineItems.insert(newSegmentLineItem)
 
 		// logger.debug('adLibItemStart', newSegmentLineItem)
+
+		stopInfinitesRunningOnLayer(runningOrder, segLine, newSegmentLineItem.sourceLayerId)
 
 		updateTimeline(runningOrder.studioInstallationId)
 	},
@@ -616,6 +622,18 @@ Meteor.methods({
 		}
 	}
 })
+
+function stopInfinitesRunningOnLayer (runningOrder: RunningOrder, segLine: SegmentLine, sourceLayer: string) {
+	let remainingLines = runningOrder.getSegmentLines().filter(l => l._rank > segLine._rank)
+	for (let line of remainingLines) {
+		let continuations = line.getSegmentLinesItems().filter(i => i.isInfinite && i.infiniteId && i.infiniteId !== i._id && i.sourceLayerId === sourceLayer)
+		if (continuations.length === 0) {
+			return
+		}
+
+		continuations.forEach(i => SegmentLineItems.remove(i))
+	}
+}
 
 function convertAdLibToSLineItem (adLibItem: SegmentLineAdLibItem, segmentLine: SegmentLine): SegmentLineItem {
 	const oldId = adLibItem._id
