@@ -89,7 +89,8 @@ Meteor.methods({
 			dynamicallyInserted: true
 		})
 
-		// @todo - ensure that any infinite contintations removed by adlib are restored
+		// ensure that any removed infinites (caused by adlib) are restored
+		updateSourceLayerInfinitesAfterLine(runningOrder, true)
 
 		// Remove duration on segmentLineItems, as this is set by the ad-lib playback editing
 		SegmentLineItems.update({ runningOrderId: runningOrder._id }, { $unset: {
@@ -183,6 +184,7 @@ Meteor.methods({
 		return now
 	},
 
+	// TODO - this is no longer needed. perhaps we still want to run the updat method used after running order import though?
 	'tmp_updateInfinites': (roId: string) => {
 		let runningOrder = RunningOrders.findOne(roId)
 		if (!runningOrder) throw new Meteor.Error(404, `RunningOrder "${roId}" not found!`)
@@ -195,70 +197,7 @@ Meteor.methods({
 			}
 		}
 
-		let activeLines: { [layer: string]: SegmentLineItem } = {}
-		let activeLinesSegments: { [layer: string]: string } = {}
-
-		let lines = runningOrder.getSegmentLines()
-		for (let line of lines) {
-			let items = line.getSegmentLinesItems()
-
-			// copy infintes to this
-			for (let k in activeLines) {
-				let l = activeLines[k]
-
-				// Out on next wants to limit to within a segment
-				if (l.infiniteMode === SegmentLineItemLifespan.OutOnNext && activeLinesSegments[k] !== line.segmentId) {
-					delete activeLines[k]
-					delete activeLinesSegments[k]
-					continue
-				}
-
-				l.segmentLineId = line._id
-				l.continuesRefId = l._id
-				l.trigger = {
-					type: TriggerType.TIME_ABSOLUTE,
-					value: 0
-				}
-				l._id = l.infiniteId + '_' + line._id
-
-				const exist = items.filter(i => i.sourceLayerId === l.sourceLayerId)
-				if (exist && exist.length > 0) {
-					delete activeLines[k] // It will be stopped by this line
-
-					if (exist[0].trigger.type === TriggerType.TIME_ABSOLUTE) {
-						if (exist[0].trigger.value === 0) {
-							// skip the infinite, as it will never show
-							continue
-						} else {
-							// TODO - set duration to a bit from the start - dont know the exact until segline is evaluated/started
-							// TODO - could this just be the value? the duration can be overridden when it matters later on. does that help in any way though?
-						}
-					} else if (exist[0].trigger.type === TriggerType.TIME_RELATIVE) {
-						// TODO
-					} else {
-						// this shouldnt happen, so we wont try to handle this case
-						// TODO log warning
-						continue
-					}
-				}
-
-				SegmentLineItems.insert(l)
-			}
-
-			let newInfinites = items.filter(i => i.infiniteMode)
-			newInfinites.forEach(i => {
-				// Set the infinite id of this
-				i.infiniteId = i._id
-				SegmentLineItems.update(i._id, {$set: {
-					infiniteId: i._id
-				}})
-
-				// can only be one infinite on a layer at a time
-				// TODO - if there are multiple in this set, make sure to pass on the last one
-				activeLines[i.sourceLayerId] = i
-				activeLinesSegments[i.sourceLayerId] = line.segmentId
-			})
-		}
+		updateSourceLayerInfinitesAfterLine(runningOrder, true)
 	},
 
 	/**
@@ -606,6 +545,8 @@ Meteor.methods({
 			}
 		})
 
+		updateSourceLayerInfinitesAfterLine(runningOrder, false, segLine)
+
 		updateTimeline(runningOrder.studioInstallationId)
 	},
 	'playout_timelineTriggerTimeUpdate': (timelineObjId: string, time: number) => {
@@ -626,16 +567,146 @@ Meteor.methods({
 	}
 })
 
+function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUntilEnd: boolean, previousLine?: SegmentLine) {
+	let activeLines: { [layer: string]: SegmentLineItem } = {}
+	let activeLinesSegments: { [layer: string]: string } = {}
+
+	if (previousLine) {
+		// figure out the baseline to set
+		let prevItems = previousLine.getSegmentLinesItems().filter(i => i.infiniteMode)
+		for (let item of prevItems) {
+			// this means it has been stopped, so dont continue it now
+			if (item.duration) {
+				continue
+			}
+
+			if (!item.infiniteId) {
+				// ensure infinite id is set
+				item.infiniteId = item._id
+				SegmentLineItems.update(item._id, { $set: { infiniteId: item.infiniteId } })
+			}
+
+			activeLines[item.sourceLayerId] = item
+			activeLinesSegments[item.sourceLayerId] = previousLine.segmentId
+		}
+	}
+
+	let linesToProcess = runningOrder.getSegmentLines()
+	if (previousLine) {
+		linesToProcess = linesToProcess.filter(l => l._rank > previousLine._rank)
+	}
+
+	for (let line of linesToProcess) {
+		// Drop any that relate only to previous segments
+		for (let k in activeLinesSegments) {
+			let s = activeLinesSegments[k]
+			let i = activeLines[k]
+			if (!i.infiniteMode || i.infiniteMode === SegmentLineItemLifespan.OutOnNext && s !== line.segmentId) {
+				delete activeLines[k]
+				delete activeLinesSegments[k]
+			}
+		}
+
+		// ensure any currently defined infinites are still wanted
+		let currentItems = line.getSegmentLinesItems()
+		let currentInfinites = currentItems.filter(i => i.infiniteMode && i.infiniteId && i.infiniteId !== i._id)
+		let removedInfinites: string[] = []
+		for (let item of currentInfinites) {
+			if (!activeLinesSegments[item.sourceLayerId]) {
+				// Previous item no longer enforces the existence of this one
+				SegmentLineItems.remove(item)
+				removedInfinites.push(item._id)
+			}
+			// TODO - should i check whether it has ended, as that could have happened when reevaluating??
+		}
+
+		// stop if not running to the end and there is/was nothing active
+		if (!runUntilEnd && Object.keys(activeLinesSegments).length === 0 && currentInfinites.length === 0) {
+			break
+		}
+
+		// figure out what infinites are to be extended
+		// TODO - these need sorting somehow
+		currentItems = currentItems.filter(i => removedInfinites.indexOf(i._id) < 0)
+		for (let k in activeLines) {
+			let newItem = activeLines[k]
+
+			const exist = currentItems.filter(i => i.sourceLayerId === newItem.sourceLayerId)
+			if (exist && exist.length > 0) {
+				if (exist.find(e => !!e.infiniteId && e.infiniteId === newItem.infiniteId)) {
+					continue
+				}
+
+				delete activeLines[k] // It will be stopped by this line
+				delete activeLinesSegments[k] // It will be stopped by this line
+
+				// if we matched with an infinite, then make sure that infinite is kept going
+				if (exist[0].infiniteMode) {
+					activeLines[k] = exist[0]
+					activeLinesSegments[k] = line.segmentId
+				}
+
+				if (exist[0].trigger.type === TriggerType.TIME_ABSOLUTE) {
+					if (exist[0].trigger.value === 0) {
+						// skip the infinite, as it will never show
+						continue
+					} else {
+						// TODO - set duration to a bit from the start - dont know the exact until segline is evaluated/started
+						// TODO - could this just be the value? the duration can be overridden when it matters later on. does that help in any way though?
+					}
+				} else if (exist[0].trigger.type === TriggerType.TIME_RELATIVE) {
+					// TODO
+				} else {
+					// this shouldnt happen, so we wont try to handle this case
+					// TODO log warning
+					continue
+				}
+			}
+
+			newItem.segmentLineId = line._id
+			newItem.continuesRefId = newItem._id
+			newItem.trigger = {
+				type: TriggerType.TIME_ABSOLUTE,
+				value: 0
+			}
+			newItem._id = newItem.infiniteId + '_' + line._id
+
+			SegmentLineItems.insert(newItem)
+		}
+
+		// find any new infinites exposed by this
+		let newInfinites = currentItems.filter(i => i.infiniteMode && (!i.infiniteId || i.infiniteId === i._id))
+		newInfinites.forEach(i => {
+			// Set the infinite id of this
+			if (!i.infiniteId) {
+				i.infiniteId = i._id
+				SegmentLineItems.update(i._id, {$set: {
+					infiniteId: i._id
+				}})
+			}
+
+			// can only be one infinite on a layer at a time
+			// TODO - if there are multiple in this set, make sure to pass on the last one
+			activeLines[i.sourceLayerId] = i
+			activeLinesSegments[i.sourceLayerId] = line.segmentId
+		})
+	}
+}
+
+// TODO - replace this with the above? should be able to handle infinite adlib items.
 function stopInfinitesRunningOnLayer (runningOrder: RunningOrder, segLine: SegmentLine, sourceLayer: string) {
 	let remainingLines = runningOrder.getSegmentLines().filter(l => l._rank > segLine._rank)
 	for (let line of remainingLines) {
 		let continuations = line.getSegmentLinesItems().filter(i => i.infiniteMode && i.infiniteId && i.infiniteId !== i._id && i.sourceLayerId === sourceLayer)
 		if (continuations.length === 0) {
-			return
+			break
 		}
 
 		continuations.forEach(i => SegmentLineItems.remove(i))
 	}
+
+	// ensure adlib is extended correctly if infinite
+	updateSourceLayerInfinitesAfterLine(runningOrder, false, segLine)
 }
 
 function convertAdLibToSLineItem (adLibItem: SegmentLineAdLibItem, segmentLine: SegmentLine): SegmentLineItem {
