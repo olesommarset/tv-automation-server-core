@@ -146,8 +146,6 @@ export namespace ServerPeripheralDeviceAPI {
 				multi: true
 			})
 
-			// @todo this only appears to be firing for sl_groups, so has no effect and does not help with sli_groups
-
 			Meteor.call('playout_timelineTriggerTimeUpdate', o.id, o.time)
 		})
 	}

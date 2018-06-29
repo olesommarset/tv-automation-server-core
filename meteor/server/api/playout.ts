@@ -7,7 +7,7 @@ import { RunningOrderBaselineItems, RunningOrderBaselineItem } from '../../lib/c
 import { getCurrentTime, saveIntoDb, literal, Time } from '../../lib/lib'
 import { Timeline, TimelineObj, TimelineObjGroupSegmentLine, TimelineContentTypeOther, TimelineObjAbstract, TimelineObjAbstract2, TimelineObjGroup, TimelineContentTypeLawo, TimelineObjLawo } from '../../lib/collections/Timeline'
 import { TriggerType } from 'superfly-timeline'
-import { Segments, Segment } from '../../lib/collections/Segments'
+import { Segments } from '../../lib/collections/Segments'
 import { Random } from 'meteor/random'
 import * as _ from 'underscore'
 import { logger } from './../logging'
@@ -17,7 +17,7 @@ import { IMOSRunningOrder, IMOSObjectStatus, MosString128 } from 'mos-connection
 import { PlayoutTimelinePrefixes } from '../../lib/api/playout'
 import { TemplateContext, TemplateResultAfterPost, runNamedTemplate } from './templates/templates'
 import { RunningOrderBaselineAdLibItem, RunningOrderBaselineAdLibItems } from '../../lib/collections/RunningOrderBaselineAdLibItems'
-import { sendStoryStatus, segmentId } from './peripheralDevice'
+import { sendStoryStatus } from './peripheralDevice'
 
 Meteor.methods({
 	/**
@@ -953,10 +953,10 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 		if (activeRunningOrder.currentSegmentLineId) {
 			currentSegmentLine = SegmentLines.findOne(activeRunningOrder.currentSegmentLineId)
 			if (!currentSegmentLine) throw new Meteor.Error(404, `SegmentLine "${activeRunningOrder.currentSegmentLineId}" not found!`)
+
 			const currentSegmentLineItems = currentSegmentLine.getSegmentLinesItems()
 			const currentInfiniteItems = currentSegmentLineItems.filter(l => (l.infiniteMode && l.infiniteId && l.infiniteId !== l._id))
 			const currentNormalItems = currentSegmentLineItems.filter(l => !(l.infiniteMode && l.infiniteId && l.infiniteId !== l._id))
-			// @todo verify this condition logic
 
 			let allowTransition = false
 

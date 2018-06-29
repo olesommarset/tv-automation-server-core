@@ -67,12 +67,10 @@ export interface SegmentLineItem extends SegmentLineItemGeneric {
 	segmentLineId: string
 	expectedDuration: number
 	isTransition: boolean
-	infiniteMode?: SegmentLineItemLifespan
 
 	/** This is set when the item is infinite, to deduplicate the contents on the timeline, while allowing out of order */
+	infiniteMode?: SegmentLineItemLifespan
 	infiniteId?: string
-	/** Set when this is infinite and copied from the previous segmentline. This allows us to track its ownership and purge it on activation */
-	// infiniteCopyRefId?: string
 
 	startedPlayback?: number
 
