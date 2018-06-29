@@ -101,7 +101,7 @@ export interface BaseContent {
 
 export type SomeTimelineObject = TimelineObj | TimelineObjGroup | TimelineObjCCGVideo | TimelineObjLawoSource
 export interface VTContent extends BaseContent {
-	filename: string
+	fileName: string
 	path: string
 	firstWords: string
 	lastWords: string
@@ -134,7 +134,7 @@ export interface ScriptContent extends BaseContent {
 }
 
 export interface GraphicsContent extends BaseContent {
-	filename: string
+	fileName: string
 	path: string
 	thumbnail?: string
 	templateData?: object
@@ -150,7 +150,7 @@ export interface SplitsContent extends BaseContent {
 }
 
 export interface AudioContent extends BaseContent {
-	filename: string
+	fileName: string
 	path: string
 	proxyPath?: string
 	loop?: boolean
