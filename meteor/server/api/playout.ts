@@ -184,22 +184,6 @@ Meteor.methods({
 		return now
 	},
 
-	// TODO - this is no longer needed. perhaps we still want to run the updat method used after running order import though?
-	'tmp_updateInfinites': (roId: string) => {
-		let runningOrder = RunningOrders.findOne(roId)
-		if (!runningOrder) throw new Meteor.Error(404, `RunningOrder "${roId}" not found!`)
-
-		// Remove any existing infinite continuations
-		const oldItems = SegmentLineItems.find({ runningOrderId: roId, infiniteMode: { $exists: true } }).fetch()
-		for (let obj of oldItems) {
-			if (obj.infiniteId && obj.infiniteId !== obj._id) {
-				SegmentLineItems.remove(obj)
-			}
-		}
-
-		updateSourceLayerInfinitesAfterLine(runningOrder, true)
-	},
-
 	/**
 	 * Perform the TAKE action, i.e start playing a segmentLineItem
 	 */
@@ -567,6 +551,7 @@ Meteor.methods({
 	}
 })
 
+// TODO - execute this after importing rundown
 function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUntilEnd: boolean, previousLine?: SegmentLine) {
 	let activeLines: { [layer: string]: SegmentLineItem } = {}
 	let activeLinesSegments: { [layer: string]: string } = {}
@@ -617,7 +602,7 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 				SegmentLineItems.remove(item)
 				removedInfinites.push(item._id)
 			}
-			// TODO - should i check whether it has ended, as that could have happened when reevaluating??
+			// TODO - should i check whether it has ended, as that could have happened if we are reevaluating??
 		}
 
 		// stop if not running to the end and there is/was nothing active
@@ -626,7 +611,7 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 		}
 
 		// figure out what infinites are to be extended
-		// TODO - these need sorting somehow
+		// TODO - these need sorting somehow so that we go through them sequentially. or at least sequentially within layers
 		currentItems = currentItems.filter(i => removedInfinites.indexOf(i._id) < 0)
 		for (let k in activeLines) {
 			let newItem = activeLines[k]
@@ -646,20 +631,13 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 					activeLinesSegments[k] = line.segmentId
 				}
 
+				// Timings get handled when the replacement item starts playing.
+				// itll be too complicated to try and calculate in advance and it wouldnt account for any runtime latencies etc
 				if (exist[0].trigger.type === TriggerType.TIME_ABSOLUTE) {
 					if (exist[0].trigger.value === 0) {
 						// skip the infinite, as it will never show
 						continue
-					} else {
-						// TODO - set duration to a bit from the start - dont know the exact until segline is evaluated/started
-						// TODO - could this just be the value? the duration can be overridden when it matters later on. does that help in any way though?
 					}
-				} else if (exist[0].trigger.type === TriggerType.TIME_RELATIVE) {
-					// TODO
-				} else {
-					// this shouldnt happen, so we wont try to handle this case
-					// TODO log warning
-					continue
 				}
 			}
 
@@ -693,7 +671,6 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 	}
 }
 
-// TODO - replace this with the above? should be able to handle infinite adlib items.
 function stopInfinitesRunningOnLayer (runningOrder: RunningOrder, segLine: SegmentLine, sourceLayer: string) {
 	let remainingLines = runningOrder.getSegmentLines().filter(l => l._rank > segLine._rank)
 	for (let line of remainingLines) {
@@ -977,8 +954,8 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 			currentSegmentLine = SegmentLines.findOne(activeRunningOrder.currentSegmentLineId)
 			if (!currentSegmentLine) throw new Meteor.Error(404, `SegmentLine "${activeRunningOrder.currentSegmentLineId}" not found!`)
 			const currentSegmentLineItems = currentSegmentLine.getSegmentLinesItems()
-			const currentInfiniteItems = currentSegmentLineItems.filter(l => (l.infiniteMode && l.infiniteId))
-			const currentNormalItems = currentSegmentLineItems.filter(l => !(l.infiniteMode && l.infiniteId))
+			const currentInfiniteItems = currentSegmentLineItems.filter(l => (l.infiniteMode && l.infiniteId && l.infiniteId !== l._id))
+			const currentNormalItems = currentSegmentLineItems.filter(l => !(l.infiniteMode && l.infiniteId && l.infiniteId !== l._id))
 			// @todo verify this condition logic
 
 			let allowTransition = false
@@ -1027,30 +1004,26 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 			// any continued infinite lines need to skip the group, as they need a different start trigger
 			for (let item of currentInfiniteItems) {
 				const infiniteGroup = createSegmentLineGroup(currentSegmentLine, 0)
-				infiniteGroup._id += '_infinite_' + item._id // @todo do better?
+				infiniteGroup._id = PlayoutTimelinePrefixes.SEGMENT_LINE_GROUP_PREFIX + item._id + '_infinite'
 
-				if (item.startedPlayback) {
-					infiniteGroup.trigger = literal<ITimelineTrigger>({
-						type: TriggerType.TIME_ABSOLUTE,
-						value: item.startedPlayback
-					})
+				if (item.infiniteId) {
+					let originalItem = SegmentLineItems.findOne(item.infiniteId)
+
+					if (originalItem && originalItem.startedPlayback) {
+						infiniteGroup.trigger = literal<ITimelineTrigger>({
+							type: TriggerType.TIME_ABSOLUTE,
+							value: originalItem.startedPlayback
+						})
+					}
 				}
 
-				console.log('Continuing infinite:', infiniteGroup._id, infiniteGroup.duration, currentInfiniteItems[0].duration, currentInfiniteItems[0].expectedDuration)
-
 				const objs = transformSegmentLineIntoTimeline(currentInfiniteItems, infiniteGroup, false)
-				console.log('L2', objs[0].duration)
 				// @todo this is a hack that hopefully will not be needed once the duration of the infinite item is back to 0
 				if (objs[0].duration !== 0 && currentInfiniteItems[0].duration) {
 					objs[0].duration = currentInfiniteItems[0].duration || 0
 				}
 
 				timelineObjs = timelineObjs.concat(infiniteGroup, objs)
-				const inf1 = createSegmentLineGroupFirstObject(currentSegmentLine, infiniteGroup)
-				inf1._id += '_infinite_' + item._id // @todo do better?
-				// @todo this is sending a bad notification which could cause problems?
-				timelineObjs.push(inf1)
-
 			}
 
 			// @todo any infinite items that originate on this segment do not get stopped properly currently. because they are missing the duration hack as shown above, so this may not need any attention
@@ -1178,6 +1151,12 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 				}
 			})
 			if (!shouldRunAgain || shouldNotRunAgain) break
+		}
+
+		const missingDev = groupObjs.filter(o => !o.deviceId || !o.deviceId[0]).map(o => o._id)
+		if (missingDev.length > 0) {
+			logger.warn('Found groups without any deviceId: ' + missingDev)
+			groupObjs.filter(o => !o.deviceId || !o.deviceId[0]).forEach(o => o.deviceId[0] = 'EK7T7MxLDgWxAJczn')
 		}
 
 		// logger.debug('timelineObjs', timelineObjs)
