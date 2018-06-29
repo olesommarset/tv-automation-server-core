@@ -8,7 +8,7 @@ import {
 } from 'mos-connection'
 import { RuntimeFunctions, RuntimeFunction } from '../../../lib/collections/RuntimeFunctions'
 import { SegmentLine, DBSegmentLine } from '../../../lib/collections/SegmentLines'
-import { SegmentLineItem } from '../../../lib/collections/SegmentLineItems'
+import { SegmentLineItem, SegmentLineItemLifespan } from '../../../lib/collections/SegmentLineItems'
 import { SegmentLineAdLibItem } from '../../../lib/collections/SegmentLineAdLibItems'
 import { RunningOrderBaselineItem } from '../../../lib/collections/RunningOrderBaselineItems'
 import { literal, Optional, getCurrentTime } from '../../../lib/lib'
@@ -286,6 +286,7 @@ export function convertCodeToGeneralFunction (runtimeFunction: RuntimeFunction, 
 		Transition,
 		Ease,
 		Direction,
+		SegmentLineItemLifespan,
 	})
 	return (...args) => {
 		if (!testOnly) {

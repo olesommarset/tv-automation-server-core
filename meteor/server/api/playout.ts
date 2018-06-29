@@ -1,7 +1,7 @@
 import { Meteor } from 'meteor/meteor'
 import { RunningOrders, RunningOrder } from '../../lib/collections/RunningOrders'
 import { SegmentLine, SegmentLines } from '../../lib/collections/SegmentLines'
-import { SegmentLineItem, SegmentLineItems, ITimelineTrigger } from '../../lib/collections/SegmentLineItems'
+import { SegmentLineItem, SegmentLineItems, ITimelineTrigger, SegmentLineItemLifespan } from '../../lib/collections/SegmentLineItems'
 import { SegmentLineAdLibItems, SegmentLineAdLibItem } from '../../lib/collections/SegmentLineAdLibItems'
 import { RunningOrderBaselineItems, RunningOrderBaselineItem } from '../../lib/collections/RunningOrderBaselineItems'
 import { getCurrentTime, saveIntoDb, literal, Time } from '../../lib/lib'
@@ -188,73 +188,76 @@ Meteor.methods({
 		if (!runningOrder) throw new Meteor.Error(404, `RunningOrder "${roId}" not found!`)
 
 		// Remove any existing infinite continuations
-		const oldItems = SegmentLineItems.find({ runningOrderId: roId, isInfinite: true}).fetch()
+		const oldItems = SegmentLineItems.find({ runningOrderId: roId, infiniteMode: { $exists: true } }).fetch()
 		for (let obj of oldItems) {
 			if (obj.infiniteId && obj.infiniteId !== obj._id) {
 				SegmentLineItems.remove(obj)
 			}
 		}
 
-		let segments = runningOrder.getSegments()
 		let activeLines: { [layer: string]: SegmentLineItem } = {}
+		let activeLinesSegments: { [layer: string]: string } = {}
 
-		for (let seg of segments) {
-			// TODO - this is so that we can have onnext
+		let lines = runningOrder.getSegmentLines()
+		for (let line of lines) {
+			let items = line.getSegmentLinesItems()
 
-			let lines = seg.getSegmentLines()
-			for (let line of lines) {
-				let items = line.getSegmentLinesItems()
+			// copy infintes to this
+			for (let k in activeLines) {
+				let l = activeLines[k]
 
-				// copy infintes to this
-				for (let k in activeLines) {
-					let l = activeLines[k]
-
-					// TODO improve this logic?
-					l.segmentLineId = line._id
-					l.continuesRefId = l._id
-					l.trigger = {
-						type: TriggerType.TIME_ABSOLUTE,
-						value: 0
-					}
-					l._id = l.infiniteId + '_' + line._id
-
-					const exist = items.filter(i => i.sourceLayerId === l.sourceLayerId)
-					if (exist && exist.length > 0) {
-						delete activeLines[k] // It will be stopped by this line
-
-						if (exist[0].trigger.type === TriggerType.TIME_ABSOLUTE) {
-							if (exist[0].trigger.value === 0) {
-								// skip the infinite, as it will never show
-								continue
-							} else {
-								// TODO - set duration to a bit from the start - dont know the exact until segline is evaluated/started
-								// TODO - could this just be the value? the duration can be overridden when it matters later on. does that help in any way though?
-							}
-						} else if (exist[0].trigger.type === TriggerType.TIME_RELATIVE) {
-							// TODO
-						} else {
-							// this shouldnt happen, so we wont try to handle this case
-							// TODO log warning
-							continue
-						}
-					}
-
-					SegmentLineItems.insert(l)
+				// Out on next wants to limit to within a segment
+				if (l.infiniteMode === SegmentLineItemLifespan.OutOnNext && activeLinesSegments[k] !== line.segmentId) {
+					delete activeLines[k]
+					delete activeLinesSegments[k]
+					continue
 				}
 
-				let newInfinites = items.filter(i => i.isInfinite)
-				newInfinites.forEach(i => {
-					// Set the infinite id of this
-					i.infiniteId = i._id
-					SegmentLineItems.update(i._id, {$set: {
-						infiniteId: i._id
-					}})
+				l.segmentLineId = line._id
+				l.continuesRefId = l._id
+				l.trigger = {
+					type: TriggerType.TIME_ABSOLUTE,
+					value: 0
+				}
+				l._id = l.infiniteId + '_' + line._id
 
-					// can only be one infinite on a layer at a time
-					// TODO - if there are multiple in this set, make sure to pass on the last one
-					activeLines[i.sourceLayerId] = i
-				})
+				const exist = items.filter(i => i.sourceLayerId === l.sourceLayerId)
+				if (exist && exist.length > 0) {
+					delete activeLines[k] // It will be stopped by this line
+
+					if (exist[0].trigger.type === TriggerType.TIME_ABSOLUTE) {
+						if (exist[0].trigger.value === 0) {
+							// skip the infinite, as it will never show
+							continue
+						} else {
+							// TODO - set duration to a bit from the start - dont know the exact until segline is evaluated/started
+							// TODO - could this just be the value? the duration can be overridden when it matters later on. does that help in any way though?
+						}
+					} else if (exist[0].trigger.type === TriggerType.TIME_RELATIVE) {
+						// TODO
+					} else {
+						// this shouldnt happen, so we wont try to handle this case
+						// TODO log warning
+						continue
+					}
+				}
+
+				SegmentLineItems.insert(l)
 			}
+
+			let newInfinites = items.filter(i => i.infiniteMode)
+			newInfinites.forEach(i => {
+				// Set the infinite id of this
+				i.infiniteId = i._id
+				SegmentLineItems.update(i._id, {$set: {
+					infiniteId: i._id
+				}})
+
+				// can only be one infinite on a layer at a time
+				// TODO - if there are multiple in this set, make sure to pass on the last one
+				activeLines[i.sourceLayerId] = i
+				activeLinesSegments[i.sourceLayerId] = line.segmentId
+			})
 		}
 	},
 
@@ -338,7 +341,7 @@ Meteor.methods({
 		if (!segLineItem.startedPlayback) {
 			logger.info(`Playout reports segment line item "${sliId}" has started playback on timestamp ${(new Date(startedPlayback)).toISOString()}`)
 
-			let itemsToStop = segLine.getSegmentLinesItems().filter(l => l.isInfinite && segLineItem && l.sourceLayerId === segLineItem.sourceLayerId && segLineItem._id !== l._id)
+			let itemsToStop = segLine.getSegmentLinesItems().filter(l => l.infiniteMode && segLineItem && l.sourceLayerId === segLineItem.sourceLayerId && segLineItem._id !== l._id)
 			itemsToStop.forEach(l => {
 				let duration = 1
 				if (l.startedPlayback) {
@@ -626,7 +629,7 @@ Meteor.methods({
 function stopInfinitesRunningOnLayer (runningOrder: RunningOrder, segLine: SegmentLine, sourceLayer: string) {
 	let remainingLines = runningOrder.getSegmentLines().filter(l => l._rank > segLine._rank)
 	for (let line of remainingLines) {
-		let continuations = line.getSegmentLinesItems().filter(i => i.isInfinite && i.infiniteId && i.infiniteId !== i._id && i.sourceLayerId === sourceLayer)
+		let continuations = line.getSegmentLinesItems().filter(i => i.infiniteMode && i.infiniteId && i.infiniteId !== i._id && i.sourceLayerId === sourceLayer)
 		if (continuations.length === 0) {
 			return
 		}
@@ -903,8 +906,8 @@ function updateTimeline (studioInstallationId: string, forceNowToTime?: Time) {
 			currentSegmentLine = SegmentLines.findOne(activeRunningOrder.currentSegmentLineId)
 			if (!currentSegmentLine) throw new Meteor.Error(404, `SegmentLine "${activeRunningOrder.currentSegmentLineId}" not found!`)
 			const currentSegmentLineItems = currentSegmentLine.getSegmentLinesItems()
-			const currentInfiniteItems = currentSegmentLineItems.filter(l => (l.isInfinite && l.infiniteId))
-			const currentNormalItems = currentSegmentLineItems.filter(l => !(l.isInfinite && l.infiniteId))
+			const currentInfiniteItems = currentSegmentLineItems.filter(l => (l.infiniteMode && l.infiniteId))
+			const currentNormalItems = currentSegmentLineItems.filter(l => !(l.infiniteMode && l.infiniteId))
 			// @todo verify this condition logic
 
 			let allowTransition = false

@@ -57,12 +57,17 @@ export interface SegmentLineItemGeneric {
 	dynamicallyInserted?: boolean,
 }
 
+export enum SegmentLineItemLifespan {
+	OutOnNext = 1,
+	Infinite = 2,
+}
+
 export interface SegmentLineItem extends SegmentLineItemGeneric {
 	trigger: ITimelineTrigger
 	segmentLineId: string
 	expectedDuration: number
 	isTransition: boolean
-	isInfinite: boolean
+	infiniteMode?: SegmentLineItemLifespan
 
 	/** This is set when the item is infinite, to deduplicate the contents on the timeline, while allowing out of order */
 	infiniteId?: string
