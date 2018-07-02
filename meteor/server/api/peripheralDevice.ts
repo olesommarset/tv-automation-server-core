@@ -1156,6 +1156,10 @@ function updateStory (ro: RunningOrder, segmentLine: SegmentLine, story: IMOSROF
 		}
 	})
 
+	if (ro.active) {
+		Meteor.call('playout_generateInfinites', ro._id)
+	}
+
 	// return this.core.mosManipulate(P.methods.mosRoReadyToAir, story)
 }
 export function sendStoryStatus (ro: RunningOrder, takeSegmentLine: SegmentLine | null) {

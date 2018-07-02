@@ -178,6 +178,18 @@ Meteor.methods({
 		sendStoryStatus(runningOrder, null)
 	},
 
+	'playout_generateInfinites': (roId) => {
+		let runningOrder = RunningOrders.findOne(roId)
+		if (!runningOrder) throw new Meteor.Error(404, `RunningOrder "${roId}" not found!`)
+
+		// TODO - what strategy do we want here?
+
+		// if (runningOrder.active) {
+		// 	// ensure that any infinites are correct
+		// 	updateSourceLayerInfinitesAfterLine(runningOrder, true)
+		// }
+	},
+
 	'debug__printTime': () => {
 		let now = getCurrentTime()
 		logger.debug(new Date(now))
