@@ -273,7 +273,7 @@ Meteor.methods({
 		if (!segLineItem.startedPlayback) {
 			logger.info(`Playout reports segment line item "${sliId}" has started playback on timestamp ${(new Date(startedPlayback)).toISOString()}`)
 
-			let itemsToStop = segLine.getSegmentLinesItems().filter(l => l.infiniteMode && segLineItem && l.sourceLayerId === segLineItem.sourceLayerId && segLineItem._id !== l._id)
+			let itemsToStop = segLine.getSegmentLinesItems().filter(l => l.infiniteMode && !l.expectedDuration && segLineItem && l.sourceLayerId === segLineItem.sourceLayerId && segLineItem._id !== l._id)
 			itemsToStop.forEach(l => {
 				let duration = 1
 				if (l.startedPlayback) {
@@ -579,7 +579,7 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 
 	if (previousLine) {
 		// figure out the baseline to set
-		let prevItems = previousLine.getSegmentLinesItems().filter(i => i.infiniteMode)
+		let prevItems = previousLine.getSegmentLinesItems().filter(i => i.infiniteMode && !i.expectedDuration)
 		for (let item of prevItems) {
 			// this means it has been stopped, so dont continue it now
 			if (item.duration) {
@@ -615,7 +615,7 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 
 		// ensure any currently defined infinites are still wanted
 		let currentItems = line.getSegmentLinesItems()
-		let currentInfinites = currentItems.filter(i => i.infiniteMode && i.infiniteId && i.infiniteId !== i._id)
+		let currentInfinites = currentItems.filter(i => i.infiniteMode && !i.expectedDuration && i.infiniteId && i.infiniteId !== i._id)
 		let removedInfinites: string[] = []
 		for (let item of currentInfinites) {
 			if (!activeLinesSegments[item.sourceLayerId]) {
@@ -674,7 +674,7 @@ function updateSourceLayerInfinitesAfterLine (runningOrder: RunningOrder, runUnt
 		}
 
 		// find any new infinites exposed by this
-		let newInfinites = currentItems.filter(i => i.infiniteMode && (!i.infiniteId || i.infiniteId === i._id))
+		let newInfinites = currentItems.filter(i => i.infiniteMode && !i.expectedDuration && (!i.infiniteId || i.infiniteId === i._id))
 		newInfinites.forEach(i => {
 			// Set the infinite id of this
 			if (!i.infiniteId) {

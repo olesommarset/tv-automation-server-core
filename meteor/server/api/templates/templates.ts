@@ -24,6 +24,7 @@ import {
 } from '../../../lib/collections/Timeline'
 import { TriggerType } from 'superfly-timeline'
 import { RundownAPI } from '../../../lib/api/rundown'
+import { PlayoutTimelinePrefixes } from '../../../lib/api/playout'
 import { Transition, Ease, Direction } from '../../../lib/constants/casparcg'
 import { logger } from '../../logging'
 import { RunningOrders, RunningOrder } from '../../../lib/collections/RunningOrders'
@@ -298,6 +299,7 @@ export function convertCodeToGeneralFunction (runtimeFunction: RuntimeFunction, 
 		Ease,
 		Direction,
 		SegmentLineItemLifespan,
+		PlayoutTimelinePrefixes,
 	})
 	return (...args) => {
 		saveDebugData(runtimeFunction, reason, ...args)
