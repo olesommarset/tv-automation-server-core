@@ -18,11 +18,8 @@ import { PlayoutTimelinePrefixes } from '../../lib/api/playout'
 import { TemplateContext, TemplateResultAfterPost, runNamedTemplate } from './templates/templates'
 import { RunningOrderBaselineAdLibItem, RunningOrderBaselineAdLibItems } from '../../lib/collections/RunningOrderBaselineAdLibItems'
 import { sendStoryStatus } from './peripheralDevice'
-<<<<<<< HEAD
 import { StudioInstallations } from '../../lib/collections/StudioInstallations'
 import { triggerExternalMessage } from './externalMessage'
-=======
->>>>>>> b9a4b7c584f51ef00e45e33b68ea16129d61b6ed
 
 Meteor.methods({
 	/**
