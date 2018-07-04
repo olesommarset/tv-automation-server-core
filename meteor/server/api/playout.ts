@@ -895,7 +895,7 @@ function transformSegmentLineIntoTimeline (items: SegmentLineItem[], segmentLine
 			let tos = item.content.timelineObjects
 
 			// create a segmentLineItem group for the items and then place all of them there
-			let lineItemDuration = item.duration || item.expectedDuration || 0
+			let lineItemDuration = item.duration || 0
 			const segmentLineItemGroup = createSegmentLineItemGroup(item, lineItemDuration, segmentLineGroup)
 			timelineObjs.push(segmentLineItemGroup)
 			timelineObjs.push(createSegmentLineItemGroupFirstObject(item, segmentLineItemGroup))
